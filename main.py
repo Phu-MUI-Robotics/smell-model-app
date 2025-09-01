@@ -109,15 +109,16 @@ st.write(f"Unix timestamp เริ่มต้น : {start_unix}")
 st.write(f"Unix timestamp สิ้นสุด : {end_unix}")
 
 if not measurements:
-    st.warning("ไม่พบ Measurement หรือเชื่อมต่อ InfluxDB ไม่ได้")
-    selected_measurement = None
+    measurements = ["-"]
+    selected_measurement = st.selectbox("กรุณาเลือก Measurement :", measurements, index=0)
     serial_numbers = []
     unique_serial_numbers = ["-"]
     selected_sn = st.selectbox("กรุณาเลือก Serial No. :", unique_serial_numbers, disabled=True)
 else:
-    selected_measurement = st.selectbox("กรุณาเลือก Measurement :", measurements)
+    measurements = ["-"] + measurements
+    selected_measurement = st.selectbox("กรุณาเลือก Measurement :", measurements, index=0)
     serial_numbers = []
-    if client and selected_measurement:
+    if client and selected_measurement != "-":
         serial_numbers = get_serial_numbers(client, selected_measurement)
     def serial_sort_key(sn):
         try:
