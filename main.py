@@ -37,13 +37,12 @@ client = InfluxDBClient(
 def connect_influxdb_v1():
     try:
         client = InfluxDBClient(
-            host="mui-nose.asia",
-            port=8086,
-            username="muiadmin",
-            password="muirobotics@dmin",
-            database="fieldService"
+            host=os.getenv("INFLUXDB_HOST") or "",
+            port=int(os.getenv("INFLUXDB_PORT") or 8086),
+            username=os.getenv("INFLUXDB_USER") or "",
+            password=os.getenv("INFLUXDB_PASS") or "",
+            database=os.getenv("INFLUXDB_DB") or ""
         )
-        # ทดสอบการเชื่อมต่อด้วยการขอ list database
         client.get_list_database()
         print("[DEBUG] Connected to InfluxDB successfully.")
         return client
@@ -281,6 +280,15 @@ if "smell_label.csv" in st.session_state.csv_files and "smell_Name.xlsx" in st.s
             for fname, content in outputs.items():
                 zf.writestr(fname, content if isinstance(content, bytes) else content.encode("utf-8"))
         st.download_button("Download All Output (ZIP)", data=zip_buffer.getvalue(), file_name="smell_model_outputs.zip")
+
+# กัน SQL Injection
+if selected_measurement not in measurements:
+    st.error("Measurement ไม่ถูกต้อง")
+    st.stop()
+
+if selected_sn not in unique_serial_numbers:
+    st.error("Serial No. ไม่ถูกต้อง")
+    st.stop()
 
 
 
