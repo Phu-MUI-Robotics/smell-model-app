@@ -10,6 +10,7 @@ import processDataset
 import zipfile
 from dotenv import load_dotenv
 import os
+import pytz
 
 # Load environment variables from .env file
 load_dotenv()
@@ -97,11 +98,12 @@ with col2:
     end_date = st.date_input("วันที่สิ้นสุด", value=datetime.now().date())
     end_time = st.time_input("เวลาสิ้นสุด", value=time(23, 59))
 
-# รวมวันและเวลาเป็น datetime
-start_dt = datetime.combine(start_date, start_time)
-end_dt = datetime.combine(end_date, end_time)
+# รวมวันและเวลาเป็น datetime (ใช้ Bangkok timezone)
+bangkok_tz = pytz.timezone('Asia/Bangkok')
+start_dt = bangkok_tz.localize(datetime.combine(start_date, start_time))
+end_dt = bangkok_tz.localize(datetime.combine(end_date, end_time))
 
-# แปลงเป็น unix timestamp (วินาที)
+# แปลงเป็น unix timestamp (วินาที) - จะเป็น UTC timestamp
 start_unix = int(start_dt.timestamp())
 end_unix = int(end_dt.timestamp())
 
@@ -168,8 +170,8 @@ def query_to_dataframe(client, query):
         df = pd.DataFrame(points)
         # Rename time column
         df.rename(columns={"time": "Time"}, inplace=True)
-        # Convert time to Bangkok
-        df["Time"] = pd.to_datetime(df["Time"]).dt.tz_convert('Asia/Bangkok').dt.strftime('%d/%m/%Y  %H:%M:%S')
+        # Convert time - InfluxDB returns UTC time, convert to Bangkok timezone properly
+        df["Time"] = pd.to_datetime(df["Time"], utc=True).dt.tz_convert('Asia/Bangkok').dt.strftime('%d/%m/%Y  %H:%M:%S')
         # Only keep s1-s8
         for col in ["s1","s2","s3","s4","s5","s6","s7","s8"]:
             if col in df.columns:
