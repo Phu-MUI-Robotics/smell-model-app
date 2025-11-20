@@ -93,10 +93,10 @@ st.title("Smell Model Mini-App")
 col1, col2 = st.columns(2)
 with col1:
     start_date = st.date_input("วันที่เริ่มต้น", value=datetime.now().date() - timedelta(days=1))
-    start_time = st.time_input("เวลาเริ่มต้น", value=time(0, 0))
+    start_time = st.time_input("เวลาเริ่มต้น", value=time(0, 0), step=1800)  # 30 minutes = 1800 seconds
 with col2:
     end_date = st.date_input("วันที่สิ้นสุด", value=datetime.now().date())
-    end_time = st.time_input("เวลาสิ้นสุด", value=time(23, 59))
+    end_time = st.time_input("เวลาสิ้นสุด", value=time(23, 59), step=1800)  # 30 minutes = 1800 seconds
 
 # รวมวันและเวลาเป็น datetime (ใช้ Bangkok timezone)
 bangkok_tz = pytz.timezone('Asia/Bangkok')
@@ -233,7 +233,7 @@ if st.session_state.get('show_split_config', False):
                 'end_date': end_date,
                 'end_time': end_time,
                 'smell_label': f'Smell{i+1}',
-                'smell_name': f'Phu{i+1}'
+                'smell_name': ''
             } for i in range(num_splits)
         ]
     
@@ -245,22 +245,28 @@ if st.session_state.get('show_split_config', False):
                 split_start_date = st.date_input(
                     f"วันที่เริ่มต้น (Split {i+1})",
                     value=st.session_state.splits[i]['start_date'],
+                    min_value=start_date,
+                    max_value=end_date,
                     key=f"split_{i}_start_date"
                 )
                 split_start_time = st.time_input(
                     f"เวลาเริ่มต้น (Split {i+1})",
                     value=st.session_state.splits[i]['start_time'],
+                    step=300,
                     key=f"split_{i}_start_time"
                 )
             with col2:
                 split_end_date = st.date_input(
                     f"วันที่สิ้นสุด (Split {i+1})",
                     value=st.session_state.splits[i]['end_date'],
+                    min_value=start_date,
+                    max_value=end_date,
                     key=f"split_{i}_end_date"
                 )
                 split_end_time = st.time_input(
                     f"เวลาสิ้นสุด (Split {i+1})",
                     value=st.session_state.splits[i]['end_time'],
+                    step=300,
                     key=f"split_{i}_end_time"
                 )
             
