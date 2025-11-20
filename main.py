@@ -364,9 +364,9 @@ if st.session_state.get('show_split_config', False):
                 
                 st.success(f"✅ ประมวลผลสำเร็จ! รวมข้อมูล {len(all_dfs)} splits ({len(combined_df)} แถว)")
                 
-                # Show preview
-                st.markdown("#### 👀 ตัวอย่างข้อมูลที่รวมแล้ว")
-                st.dataframe(combined_df.head(20), use_container_width=True)
+                # Show final combined table only
+                st.markdown("#### 👀 ตัวอย่างข้อมูลที่รวมแล้ว (Final)")
+                st.dataframe(combined_df, use_container_width=True)
                 
                 st.markdown("#### 📝 Smell Name Mapping")
                 st.dataframe(name_df, use_container_width=True)
