@@ -93,10 +93,10 @@ st.title("Smell Model Mini-App")
 col1, col2 = st.columns(2)
 with col1:
     start_date = st.date_input("วันที่เริ่มต้น", value=datetime.now().date() - timedelta(days=1))
-    start_time = st.time_input("เวลาเริ่มต้น", value=time(0, 0), step=1800)  # 30 minutes = 1800 seconds
+    start_time = st.time_input("เวลาเริ่มต้น", value=time(0, 0))
 with col2:
     end_date = st.date_input("วันที่สิ้นสุด", value=datetime.now().date())
-    end_time = st.time_input("เวลาสิ้นสุด", value=time(23, 59), step=1800)  # 30 minutes = 1800 seconds
+    end_time = st.time_input("เวลาสิ้นสุด", value=time(23, 59))
 
 # รวมวันและเวลาเป็น datetime (ใช้ Bangkok timezone)
 bangkok_tz = pytz.timezone('Asia/Bangkok')
