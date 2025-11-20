@@ -224,6 +224,18 @@ if st.session_state.get('show_split_config', False):
     num_splits = st.number_input("จำนวน Split ที่ต้องการ:", min_value=1, max_value=20, value=st.session_state.num_splits, step=1)
     st.session_state.num_splits = num_splits
     
+    # สร้างรายการเวลาทุก 5 นาทีในช่วงที่เลือก
+    def generate_time_options(start_t, end_t):
+        times = []
+        current = datetime.combine(datetime.today(), start_t)
+        end_dt = datetime.combine(datetime.today(), end_t)
+        while current <= end_dt:
+            times.append(current.time())
+            current += timedelta(minutes=5)
+        return times
+    
+    time_options = generate_time_options(start_time, end_time)
+    
     # Initialize splits list if needed
     if len(st.session_state.splits) != num_splits:
         st.session_state.splits = [
@@ -249,10 +261,16 @@ if st.session_state.get('show_split_config', False):
                     max_value=end_date,
                     key=f"split_{i}_start_date"
                 )
-                split_start_time = st.time_input(
+                # หา index ของเวลาปัจจุบันใน time_options
+                try:
+                    current_start_idx = time_options.index(st.session_state.splits[i]['start_time'])
+                except ValueError:
+                    current_start_idx = 0
+                split_start_time = st.selectbox(
                     f"เวลาเริ่มต้น (Split {i+1})",
-                    value=st.session_state.splits[i]['start_time'],
-                    step=300,
+                    options=time_options,
+                    index=current_start_idx,
+                    format_func=lambda t: t.strftime('%H:%M'),
                     key=f"split_{i}_start_time"
                 )
             with col2:
@@ -263,10 +281,16 @@ if st.session_state.get('show_split_config', False):
                     max_value=end_date,
                     key=f"split_{i}_end_date"
                 )
-                split_end_time = st.time_input(
+                # หา index ของเวลาปัจจุบันใน time_options
+                try:
+                    current_end_idx = time_options.index(st.session_state.splits[i]['end_time'])
+                except ValueError:
+                    current_end_idx = len(time_options) - 1 if time_options else 0
+                split_end_time = st.selectbox(
                     f"เวลาสิ้นสุด (Split {i+1})",
-                    value=st.session_state.splits[i]['end_time'],
-                    step=300,
+                    options=time_options,
+                    index=current_end_idx,
+                    format_func=lambda t: t.strftime('%H:%M'),
                     key=f"split_{i}_end_time"
                 )
             
@@ -276,14 +300,12 @@ if st.session_state.get('show_split_config', False):
                     f"Smell Label (Split {i+1})",
                     value=st.session_state.splits[i]['smell_label'],
                     key=f"split_{i}_smell_label",
-                    placeholder="เช่น Smell1"
                 )
             with col4:
                 smell_name = st.text_input(
                     f"ชื่อกลิ่น (Split {i+1})",
                     value=st.session_state.splits[i]['smell_name'],
                     key=f"split_{i}_smell_name",
-                    placeholder="เช่น Phu1"
                 )
             
             # Update session state
