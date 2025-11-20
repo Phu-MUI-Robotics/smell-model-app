@@ -143,6 +143,14 @@ st.write(f"Serial No. ที่เลือก : {selected_sn}")
 if 'csv_files' not in st.session_state:
     st.session_state.csv_files = {}
 
+# Initialize session state for splits
+if 'splits' not in st.session_state:
+    st.session_state.splits = []
+if 'num_splits' not in st.session_state:
+    st.session_state.num_splits = 1
+if 'show_split_config' not in st.session_state:
+    st.session_state.show_split_config = False
+
 def build_query(measurement, serial_no, start_unix, end_unix):
     # InfluxDB ใช้ ms
     query = f'''
@@ -202,41 +210,140 @@ if st.button("Export to CSV", type="primary"):
     if not selected_measurement or not selected_sn:
         st.warning("กรุณาเลือก Measurement และ Serial No. ก่อน export")
     else:
-        query = build_query(selected_measurement, selected_sn, start_unix, end_unix)
-        df = query_to_dataframe(client, query)
-        if df.empty:
-            st.warning("ไม่พบข้อมูลสำหรับช่วงเวลานี้")
+        st.session_state.show_split_config = True
+        st.session_state.selected_measurement = selected_measurement
+        st.session_state.selected_sn = selected_sn
+        st.rerun()
+
+# แสดงส่วน Split Configuration
+if st.session_state.get('show_split_config', False):
+    st.markdown("---")
+    st.subheader("⚙️ กำหนด Time Range Splits")
+    
+    # เลือกจำนวน splits
+    num_splits = st.number_input("จำนวน Split ที่ต้องการ:", min_value=1, max_value=20, value=st.session_state.num_splits, step=1)
+    st.session_state.num_splits = num_splits
+    
+    # Initialize splits list if needed
+    if len(st.session_state.splits) != num_splits:
+        st.session_state.splits = [
+            {
+                'start_date': start_date,
+                'start_time': start_time,
+                'end_date': end_date,
+                'end_time': end_time,
+                'smell_label': f'Smell{i+1}',
+                'smell_name': f'Phu{i+1}'
+            } for i in range(num_splits)
+        ]
+    
+    # แสดงฟอร์มสำหรับแต่ละ split
+    for i in range(num_splits):
+        with st.expander(f"📋 Split {i+1}", expanded=(i==0)):
+            col1, col2 = st.columns(2)
+            with col1:
+                split_start_date = st.date_input(
+                    f"วันที่เริ่มต้น (Split {i+1})",
+                    value=st.session_state.splits[i]['start_date'],
+                    key=f"split_{i}_start_date"
+                )
+                split_start_time = st.time_input(
+                    f"เวลาเริ่มต้น (Split {i+1})",
+                    value=st.session_state.splits[i]['start_time'],
+                    key=f"split_{i}_start_time"
+                )
+            with col2:
+                split_end_date = st.date_input(
+                    f"วันที่สิ้นสุด (Split {i+1})",
+                    value=st.session_state.splits[i]['end_date'],
+                    key=f"split_{i}_end_date"
+                )
+                split_end_time = st.time_input(
+                    f"เวลาสิ้นสุด (Split {i+1})",
+                    value=st.session_state.splits[i]['end_time'],
+                    key=f"split_{i}_end_time"
+                )
+            
+            col3, col4 = st.columns(2)
+            with col3:
+                smell_label = st.text_input(
+                    f"Smell Label (Split {i+1})",
+                    value=st.session_state.splits[i]['smell_label'],
+                    key=f"split_{i}_smell_label",
+                    placeholder="เช่น Smell1"
+                )
+            with col4:
+                smell_name = st.text_input(
+                    f"ชื่อกลิ่น (Split {i+1})",
+                    value=st.session_state.splits[i]['smell_name'],
+                    key=f"split_{i}_smell_name",
+                    placeholder="เช่น Phu1"
+                )
+            
+            # Update session state
+            st.session_state.splits[i] = {
+                'start_date': split_start_date,
+                'start_time': split_start_time,
+                'end_date': split_end_date,
+                'end_time': split_end_time,
+                'smell_label': smell_label,
+                'smell_name': smell_name
+            }
+    
+    st.markdown("")
+    
+    # ปุ่ม Process All Splits
+    if st.button("✅ Process All Splits", type="primary"):
+        all_dfs = []
+        smell_name_mapping = {}
+        
+        # Process each split
+        for i, split in enumerate(st.session_state.splits):
+            # Convert to datetime
+            split_start_dt = bangkok_tz.localize(datetime.combine(split['start_date'], split['start_time']))
+            split_end_dt = bangkok_tz.localize(datetime.combine(split['end_date'], split['end_time']))
+            split_start_unix = int(split_start_dt.timestamp())
+            split_end_unix = int(split_end_dt.timestamp())
+            
+            # Query data
+            query = build_query(st.session_state.selected_measurement, st.session_state.selected_sn, split_start_unix, split_end_unix)
+            df = query_to_dataframe(client, query)
+            
+            if not df.empty:
+                # Set Smell label for entire split
+                df['Smell'] = split['smell_label']
+                all_dfs.append(df)
+                
+                # Store smell name mapping
+                smell_name_mapping[split['smell_label']] = split['smell_name']
+        
+        # Concatenate all dataframes
+        if all_dfs:
+            combined_df = pd.concat(all_dfs, ignore_index=True)
+            
+            # Save to session state
+            csv_buffer = io.StringIO()
+            combined_df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+            st.session_state.csv_files["smell_label.csv"] = csv_buffer.getvalue()
+            
+            # Create smell name mapping Excel
+            name_df = pd.DataFrame([
+                {'Smell': k, 'Name': v} for k, v in smell_name_mapping.items()
+            ])
+            excel_buffer = io.BytesIO()
+            name_df.to_excel(excel_buffer, index=False)
+            st.session_state.csv_files["smell_Name.xlsx"] = excel_buffer.getvalue()
+            
+            st.success(f"✅ ประมวลผลสำเร็จ! รวมข้อมูล {len(all_dfs)} splits ({len(combined_df)} แถว)")
+            
+            # Show preview
+            st.markdown("#### 👀 ตัวอย่างข้อมูลที่รวมแล้ว")
+            st.dataframe(combined_df.head(20), use_container_width=True)
+            
+            st.markdown("#### 📝 Smell Name Mapping")
+            st.dataframe(name_df, use_container_width=True)
         else:
-            st.session_state['edit_df'] = df.copy()
-            st.session_state['edit_filename'] = f"export_{selected_measurement}_{selected_sn}_{start_unix}_{end_unix}.csv"
-
-# แก้ไข Smell และบันทึกไฟล์ลง memory (st.data_editor)
-if 'edit_df' in st.session_state:
-    st.markdown("---")
-    st.subheader("แก้ไข Smell Model")
-    edited_df = st.data_editor(st.session_state['edit_df'], num_rows="dynamic", use_container_width=True, key="edit_table")
-    if st.button("กำหนดชื่อกลิ่น", type="primary"):
-        edited_df["Smell"] = edited_df["Smell"].fillna("")
-        csv_buffer = io.StringIO()
-        edited_df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
-        fixed_filename = "smell_label.csv"
-        st.session_state.csv_files[fixed_filename] = csv_buffer.getvalue()
-        st.success(f"✅ บันทึกไฟล์ {fixed_filename} ในระบบแล้ว")
-        # set flag เพื่อแสดง smell name editor
-        st.session_state['show_smell_name_editor'] = True
-
-# --- ส่วนนี้แยกออกมา ---
-if st.session_state.get('show_smell_name_editor', False):
-    df = pd.read_csv(io.StringIO(st.session_state.csv_files["smell_label.csv"]))
-    unique_smells = pd.DataFrame({"Smell": sorted(df["Smell"].dropna().unique()), "Name": ""})
-    st.markdown("---")
-    st.subheader("กำหนดชื่อกลิ่น (Smell Name Mapping)")
-    name_df = st.data_editor(unique_smells, num_rows="dynamic", use_container_width=True, key="smell_name_editor")
-    if st.button("💾 บันทึกชื่อกลิ่น", key="save_smell_name"):
-        excel_buffer = io.BytesIO()
-        name_df.to_excel(excel_buffer, index=False)
-        st.session_state.csv_files["smell_Name.xlsx"] = excel_buffer.getvalue()
-        st.success("✅ บันทึกไฟล์ smell_Name.xlsx ในระบบแล้ว")
+            st.error("❌ ไม่พบข้อมูลในช่วงเวลาที่เลือก")
 
 # แสดงไฟล์ใน Memory
 if st.session_state.csv_files:
@@ -250,6 +357,8 @@ if st.session_state.csv_files:
         st.session_state.pop('show_smell_name_editor', None)
         st.session_state.pop('edit_df', None)
         st.session_state.pop('edit_filename', None)
+        st.session_state.pop('show_split_config', None)
+        st.session_state.splits = []
         st.success("✅ ล้างไฟล์ใน Memory แล้ว")
         st.rerun()
 
