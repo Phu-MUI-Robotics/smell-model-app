@@ -326,26 +326,26 @@ if st.session_state.get('show_split_config', False):
             smell_name_mapping = {}
             
             # Process each split
-        for i, split in enumerate(st.session_state.splits):
-            # Convert to datetime
-            split_start_dt = bangkok_tz.localize(datetime.combine(split['start_date'], split['start_time']))
-            split_end_dt = bangkok_tz.localize(datetime.combine(split['end_date'], split['end_time']))
-            split_start_unix = int(split_start_dt.timestamp())
-            split_end_unix = int(split_end_dt.timestamp())
-            
-            # Query data
-            query = build_query(st.session_state.selected_measurement, st.session_state.selected_sn, split_start_unix, split_end_unix)
-            df = query_to_dataframe(client, query)
-            
-            if not df.empty:
-                # Set Smell label for entire split
-                df['Smell'] = split['smell_label']
-                all_dfs.append(df)
+            for i, split in enumerate(st.session_state.splits):
+                # Convert to datetime
+                split_start_dt = bangkok_tz.localize(datetime.combine(split['start_date'], split['start_time']))
+                split_end_dt = bangkok_tz.localize(datetime.combine(split['end_date'], split['end_time']))
+                split_start_unix = int(split_start_dt.timestamp())
+                split_end_unix = int(split_end_dt.timestamp())
                 
-                # Store smell name mapping
-                smell_name_mapping[split['smell_label']] = split['smell_name']
-        
-            # Concatenate all dataframes
+                # Query data
+                query = build_query(st.session_state.selected_measurement, st.session_state.selected_sn, split_start_unix, split_end_unix)
+                df = query_to_dataframe(client, query)
+                
+                if not df.empty:
+                    # Set Smell label for entire split
+                    df['Smell'] = split['smell_label']
+                    all_dfs.append(df)
+                    
+                    # Store smell name mapping
+                    smell_name_mapping[split['smell_label']] = split['smell_name']
+            
+            # Concatenate all dataframes (รันครั้งเดียวหลังจาก loop เสร็จ)
             if all_dfs:
                 combined_df = pd.concat(all_dfs, ignore_index=True)
                 
