@@ -462,6 +462,12 @@ if "smell_label.csv" in st.session_state.csv_files and "smell_Name.xlsx" in st.s
         for fname in sorted(radar_files):
             st.image(outputs[fname], caption=fname, use_container_width=True)
 
+        # แสดง PCA plot
+        st.markdown("#### PCA Analysis (2D Scatter Plot)")
+        pca_files = [k for k in outputs if k.startswith("pcaPlot/") and k.endswith(".png")]
+        for fname in sorted(pca_files):
+            st.image(outputs[fname], caption=fname, use_container_width=True)
+
         # ปุ่มดาวน์โหลด zip
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w") as zf:
