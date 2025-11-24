@@ -167,7 +167,7 @@ def process_smell_label(smell_label_csv, smell_name_excel):
         ax.set_ylabel(f'PC2 ({pca.explained_variance_ratio_[1]*100:.1f}%)', fontsize=12, fontweight='bold')
     else:
         ax.set_ylabel('PC2 (0%)', fontsize=12, fontweight='bold')
-    ax.set_title('PCA Analysis - Smell Separation', fontsize=14, fontweight='bold')
+    ax.set_title('PCA Analysis', fontsize=14, fontweight='bold', pad=20)
     ax.grid(True, alpha=0.3)
     ax.axhline(y=0, color='k', linestyle='--', linewidth=0.5)
     ax.axvline(x=0, color='k', linestyle='--', linewidth=0.5)
