@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import io
 import re
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
 def process_smell_label(smell_label_csv, smell_name_excel):
     """
@@ -82,11 +84,105 @@ def process_smell_label(smell_label_csv, smell_name_excel):
         plt.close(fig)
         radar_imgs[f"radarPlot/radar_chart_{safe_filename}.png"] = img_buf.getvalue()
 
+    # --- Step 3: PCA Analysis ---
+    pca_outputs = {}
+    
+    # Extract features (s1-s8) for PCA
+    X = average_with_names[sensor_labels].values
+    smell_labels = average_with_names['Smell'].values
+    name_labels = average_with_names['Name'].fillna(average_with_names['Smell']).values
+    
+    # Standardize the features
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    
+    # Apply PCA (2 components for 2D visualization)
+    pca = PCA(n_components=min(2, len(X)))
+    principal_components = pca.fit_transform(X_scaled)
+    
+    # Create PCA results dataframe
+    pca_df = pd.DataFrame({
+        'Smell': smell_labels,
+        'Name': name_labels,
+        'PC1': principal_components[:, 0].round(3),
+        'PC2': principal_components[:, 1].round(3) if principal_components.shape[1] > 1 else 0
+    })
+    
+    # Save PCA results
+    buf_pca = io.StringIO()
+    pca_df.to_csv(buf_pca, index=False)
+    pca_outputs['pca_results.csv'] = buf_pca.getvalue()
+    
+    # Save explained variance
+    variance_df = pd.DataFrame({
+        'Component': [f'PC{i+1}' for i in range(len(pca.explained_variance_ratio_))],
+        'Explained_Variance_Ratio': (pca.explained_variance_ratio_ * 100).round(2)
+    })
+    buf_var = io.StringIO()
+    variance_df.to_csv(buf_var, index=False)
+    pca_outputs['pca_variance.csv'] = buf_var.getvalue()
+    
+    # Save component loadings (weights)
+    loadings_df = pd.DataFrame(
+        pca.components_.T,
+        columns=[f'PC{i+1}' for i in range(len(pca.components_))],
+        index=sensor_labels
+    ).round(3)
+    loadings_df.insert(0, 'Sensor', loadings_df.index)
+    buf_load = io.StringIO()
+    loadings_df.to_csv(buf_load, index=False)
+    pca_outputs['pca_components.csv'] = buf_load.getvalue()
+    
+    # Generate PCA 2D scatter plot
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    # Plot each smell with different colors
+    colors = plt.cm.tab10(np.linspace(0, 1, len(smell_labels)))
+    for i, (smell, name) in enumerate(zip(smell_labels, name_labels)):
+        ax.scatter(
+            principal_components[i, 0],
+            principal_components[i, 1] if principal_components.shape[1] > 1 else 0,
+            c=[colors[i]],
+            s=200,
+            alpha=0.7,
+            edgecolors='black',
+            linewidth=2,
+            label=name
+        )
+        ax.annotate(
+            name,
+            (principal_components[i, 0], principal_components[i, 1] if principal_components.shape[1] > 1 else 0),
+            fontsize=10,
+            fontweight='bold',
+            ha='center',
+            va='bottom',
+            xytext=(0, 10),
+            textcoords='offset points'
+        )
+    
+    ax.set_xlabel(f'PC1 ({pca.explained_variance_ratio_[0]*100:.1f}%)', fontsize=12, fontweight='bold')
+    if len(pca.explained_variance_ratio_) > 1:
+        ax.set_ylabel(f'PC2 ({pca.explained_variance_ratio_[1]*100:.1f}%)', fontsize=12, fontweight='bold')
+    else:
+        ax.set_ylabel('PC2 (0%)', fontsize=12, fontweight='bold')
+    ax.set_title('PCA Analysis - Smell Separation', fontsize=14, fontweight='bold')
+    ax.grid(True, alpha=0.3)
+    ax.axhline(y=0, color='k', linestyle='--', linewidth=0.5)
+    ax.axvline(x=0, color='k', linestyle='--', linewidth=0.5)
+    ax.legend(loc='best', fontsize=9)
+    
+    img_buf_pca = io.BytesIO()
+    plt.tight_layout()
+    plt.savefig(img_buf_pca, format='png', dpi=150)
+    plt.close(fig)
+    pca_outputs['pcaPlot/pca_scatter_2d.png'] = img_buf_pca.getvalue()
+
     # Return all files as dict
     return {
         "sorted_labeled_data.csv": buf_sorted.getvalue(),
         "dataset.csv": buf_dataset.getvalue(),
         "average_smell_sensor_values.csv": buf_avg.getvalue(),
-        **radar_imgs
+        **radar_imgs,
+        **pca_outputs
     }
 

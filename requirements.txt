@@ -6,3 +6,4 @@ openpyxl
 influxdb
 python-dotenv
 pytz
+scikit-learn
