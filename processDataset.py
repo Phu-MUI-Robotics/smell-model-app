@@ -191,20 +191,20 @@ def process_smell_label(smell_label_csv, smell_name_excel):
     linkage_matrix = linkage(X_scaled, method='ward')
     
     # Create dendrogram
-    fig_hca, ax_hca = plt.subplots(figsize=(10, 6))
+    fig_hca, ax_hca = plt.subplots(figsize=(12, 6))
     dendrogram(
         linkage_matrix,
         labels=name_labels,
         ax=ax_hca,
         leaf_font_size=11,
-        leaf_rotation=0,
-        orientation='right',
+        leaf_rotation=45,
+        orientation='top',
         color_threshold=0.7 * max(linkage_matrix[:, 2])
     )
-    ax_hca.set_xlabel('Distance (Ward Linkage)', fontsize=12, fontweight='bold')
-    ax_hca.set_ylabel('Smell', fontsize=12, fontweight='bold')
-    ax_hca.set_title('Hierarchical Cluster Analysis (HCA) - Smell Similarity', fontsize=14, fontweight='bold')
-    ax_hca.grid(True, alpha=0.3, axis='x')
+    ax_hca.set_ylabel('Distance', fontsize=12, fontweight='bold')
+    ax_hca.set_xlabel('Sample Index or Label', fontsize=12, fontweight='bold')
+    ax_hca.set_title('Hierarchical Clustering Dendrogram', fontsize=14, fontweight='bold')
+    ax_hca.grid(True, alpha=0.3, axis='y')
     
     img_buf_hca = io.BytesIO()
     plt.tight_layout()
