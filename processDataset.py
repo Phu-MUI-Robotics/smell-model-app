@@ -169,7 +169,7 @@ def process_smell_label(smell_label_csv, smell_name_excel):
     ax.grid(True, alpha=0.3)
     ax.axhline(y=0, color='k', linestyle='--', linewidth=0.5)
     ax.axvline(x=0, color='k', linestyle='--', linewidth=0.5)
-    ax.legend(loc='best', fontsize=9)
+    ax.legend(loc='upper right', fontsize=9, bbox_to_anchor=(0.98, 0.98))
     
     img_buf_pca = io.BytesIO()
     plt.tight_layout()
