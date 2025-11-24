@@ -63,13 +63,10 @@ def get_measurements(client):
 # ฟังก์ชันดึง Serial No. จาก measurement ที่เลือก
 def get_serial_numbers(client, measurement):
     try:
-        query = f'SELECT LAST("sn") AS "sn" FROM "{measurement}" WHERE time > now() - 1d GROUP BY "sName"'
+        # ใช้ SHOW TAG VALUES แบบเดียวกับ Grafana เพื่อดึง serial number ทั้งหมด
+        query = f'SHOW TAG VALUES FROM "{measurement}" WITH KEY = "sn"'
         result = client.query(query)
-        serials = []
-        for serie in result.raw.get('series', []):
-            sn = serie['values'][0][1] if serie['values'] and len(serie['values'][0]) > 1 else None
-            if sn:
-                serials.append(sn)
+        serials = [point['value'] for point in result.get_points()]
         return serials
     except Exception as e:
         print(f"[ERROR] Failed to query serial numbers: {e}")
