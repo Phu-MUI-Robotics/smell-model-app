@@ -276,7 +276,7 @@ if st.session_state.get('show_split_config', False):
                 'start_time': start_time,
                 'end_date': end_date,
                 'end_time': end_time,
-                'smell_label': f'Smell{i+1}',
+                'smell_label': f'Smell {i+1}',
                 'smell_name': ''
             } for i in range(num_splits)
         ]
