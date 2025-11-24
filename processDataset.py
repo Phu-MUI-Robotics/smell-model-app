@@ -203,7 +203,7 @@ def process_smell_label(smell_label_csv, smell_name_excel):
     )
     ax_hca.set_ylabel('Distance', fontsize=12, fontweight='bold')
     ax_hca.set_xlabel('Sample Index or Label', fontsize=12, fontweight='bold')
-    ax_hca.set_title('Hierarchical Clustering Dendrogram', fontsize=14, fontweight='bold')
+    ax_hca.set_title('Hierarchical Clustering Dendrogram', fontsize=14, fontweight='bold', pad=20)
     ax_hca.grid(True, alpha=0.3, axis='y')
     
     img_buf_hca = io.BytesIO()
