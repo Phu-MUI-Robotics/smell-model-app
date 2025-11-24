@@ -5,6 +5,8 @@ import io
 import re
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
+from scipy.cluster.hierarchy import dendrogram, linkage
+from scipy.spatial.distance import pdist
 
 def process_smell_label(smell_label_csv, smell_name_excel):
     """
@@ -169,7 +171,9 @@ def process_smell_label(smell_label_csv, smell_name_excel):
     ax.grid(True, alpha=0.3)
     ax.axhline(y=0, color='k', linestyle='--', linewidth=0.5)
     ax.axvline(x=0, color='k', linestyle='--', linewidth=0.5)
-    ax.legend(loc='upper right', fontsize=9, framealpha=0.9,borderaxespad=0.5,handletextpad=1.0, labelspacing=1.2)
+    ax.legend(loc='upper right', fontsize=9, framealpha=0.9, 
+              bbox_to_anchor=(1.0, 1.0), borderaxespad=0.5,
+              handletextpad=1.0, labelspacing=1.2)
     
     img_buf_pca = io.BytesIO()
     plt.tight_layout(pad=1.5)
@@ -177,12 +181,53 @@ def process_smell_label(smell_label_csv, smell_name_excel):
     plt.close(fig)
     pca_outputs['pcaPlot/pca_scatter_2d.png'] = img_buf_pca.getvalue()
 
+    # --- HCA (Hierarchical Cluster Analysis) ---
+    hca_outputs = {}
+    
+    # Use the same standardized data as PCA
+    X_scaled = scaler.fit_transform(average_with_names[sensor_labels])
+    
+    # Compute linkage matrix using Ward's method
+    linkage_matrix = linkage(X_scaled, method='ward')
+    
+    # Create dendrogram
+    fig_hca, ax_hca = plt.subplots(figsize=(10, 6))
+    dendrogram(
+        linkage_matrix,
+        labels=name_labels,
+        ax=ax_hca,
+        leaf_font_size=11,
+        leaf_rotation=0,
+        orientation='right',
+        color_threshold=0.7 * max(linkage_matrix[:, 2])
+    )
+    ax_hca.set_xlabel('Distance (Ward Linkage)', fontsize=12, fontweight='bold')
+    ax_hca.set_ylabel('Smell', fontsize=12, fontweight='bold')
+    ax_hca.set_title('Hierarchical Cluster Analysis (HCA) - Smell Similarity', fontsize=14, fontweight='bold')
+    ax_hca.grid(True, alpha=0.3, axis='x')
+    
+    img_buf_hca = io.BytesIO()
+    plt.tight_layout()
+    plt.savefig(img_buf_hca, format='png', dpi=150)
+    plt.close(fig_hca)
+    hca_outputs['hcaPlot/hca_dendrogram.png'] = img_buf_hca.getvalue()
+    
+    # Save linkage matrix
+    linkage_df = pd.DataFrame(
+        linkage_matrix,
+        columns=['Cluster1', 'Cluster2', 'Distance', 'Sample_Count']
+    )
+    buf_linkage = io.StringIO()
+    linkage_df.to_csv(buf_linkage, index=False)
+    hca_outputs['hca_linkage_matrix.csv'] = buf_linkage.getvalue()
+
     # Return all files as dict
     return {
         "sorted_labeled_data.csv": buf_sorted.getvalue(),
         "dataset.csv": buf_dataset.getvalue(),
         "average_smell_sensor_values.csv": buf_avg.getvalue(),
         **radar_imgs,
-        **pca_outputs
+        **pca_outputs,
+        **hca_outputs
     }
 

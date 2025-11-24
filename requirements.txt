@@ -7,3 +7,4 @@ influxdb
 python-dotenv
 pytz
 scikit-learn
+scipy
