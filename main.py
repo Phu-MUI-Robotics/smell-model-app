@@ -72,6 +72,17 @@ def get_serial_numbers(client, measurement):
         print(f"[ERROR] Failed to query serial numbers: {e}")
         return []
 
+# ฟังก์ชันดึง Station Names (sName) จาก measurement
+def get_station_names(client, measurement):
+    try:
+        query = f'SHOW TAG VALUES FROM "{measurement}" WITH KEY = "sName"'
+        result = client.query(query)
+        stations = [point['value'] for point in result.get_points()]
+        return stations
+    except Exception as e:
+        print(f"[ERROR] Failed to query station names: {e}")
+        return []
+
 #---------------------------------------------------------------------------------------
 
 # 3. UI
@@ -107,35 +118,63 @@ end_unix = int(end_dt.timestamp())
 st.write(f"Unix timestamp เริ่มต้น : {start_unix}")
 st.write(f"Unix timestamp สิ้นสุด : {end_unix}")
 
+# ฟังก์ชัน sort serial number
+def serial_sort_key(sn):
+    try:
+        parts = sn.split('-')
+        if len(parts) >= 3:
+            month = int(parts[1][:2])
+            year = int(parts[1][2:])
+            return (year, month, sn)
+    except Exception:
+        pass
+    return (0, 0, sn)
+
 if not measurements:
     measurements = ["-"]
     selected_measurement = st.selectbox("กรุณาเลือก Measurement :", measurements, index=0)
     serial_numbers = []
     unique_serial_numbers = ["-"]
     selected_sn = st.selectbox("กรุณาเลือก Serial No. :", unique_serial_numbers, disabled=True)
+    selected_station = None
 else:
     measurements = ["-"] + measurements
     selected_measurement = st.selectbox("กรุณาเลือก Measurement :", measurements, index=0)
     serial_numbers = []
     if client and selected_measurement != "-":
         serial_numbers = get_serial_numbers(client, selected_measurement)
-    def serial_sort_key(sn):
-        try:
-            parts = sn.split('-')
-            if len(parts) >= 3:
-                month = int(parts[1][:2])
-                year = int(parts[1][2:])
-                return (year, month, sn)
-        except Exception:
-            pass
-        return (0, 0, sn)
-
-    unique_serial_numbers = sorted(set(serial_numbers), key=serial_sort_key) if serial_numbers else ["-"]
+    
+    # เพิ่มตัวเลือก "ไม่เจอ" ลงใน dropdown
+    unique_serial_numbers = sorted(set(serial_numbers), key=serial_sort_key) if serial_numbers else []
+    if unique_serial_numbers:
+        unique_serial_numbers = ["-"] + unique_serial_numbers + ["❌ ไม่เจอ - ค้นหาจาก Station"]
+    else:
+        unique_serial_numbers = ["-", "❌ ไม่เจอ - ค้นหาจาก Station"]
+    
     selected_sn = st.selectbox("กรุณาเลือก Serial No. :", unique_serial_numbers)
+    
+    # ถ้าเลือก "ไม่เจอ" ให้แสดง dropdown Station
+    selected_station = None
+    if selected_sn == "❌ ไม่เจอ - ค้นหาจาก Station":
+        if client and selected_measurement != "-":
+            station_names = get_station_names(client, selected_measurement)
+            unique_stations = sorted(set(station_names)) if station_names else ["-"]
+            if unique_stations and unique_stations != ["-"]:
+                unique_stations = ["-"] + unique_stations
+            selected_station = st.selectbox("🔍 กรุณาเลือก Station (sName) :", unique_stations)
+            if selected_station != "-":
+                st.info(f"💡 ระบบจะใช้ Station: **{selected_station}** ในการ query ข้อมูล")
+                # ใช้ selected_station เป็น serial number แทน
+                selected_sn = selected_station
+        else:
+            st.warning("⚠️ กรุณาเลือก Measurement ก่อน")
+            selected_sn = "-"
 
 st.write(f"Measurement ที่เลือก : {selected_measurement}")
-
-st.write(f"Serial No. ที่เลือก : {selected_sn}")
+if selected_station:
+    st.write(f"🔍 ค้นหาจาก Station : {selected_station}")
+else:
+    st.write(f"Serial No. ที่เลือก : {selected_sn}")
 
 if 'csv_files' not in st.session_state:
     st.session_state.csv_files = {}
@@ -148,13 +187,15 @@ if 'num_splits' not in st.session_state:
 if 'show_split_config' not in st.session_state:
     st.session_state.show_split_config = False
 
-def build_query(measurement, serial_no, start_unix, end_unix):
+def build_query(measurement, serial_no, start_unix, end_unix, use_station=False):
     # InfluxDB ใช้ ms
+    # ถ้า use_station=True จะใช้ sName แทน sn ในการ query
+    tag_key = "sName" if use_station else "sn"
     query = f'''
     SELECT mean("a1") AS "s1", mean("a2") AS "s2", mean("a3") AS "s3", mean("a4") AS "s4",
            mean("a5") AS "s5", mean("a6") AS "s6", mean("a7") AS "s7", mean("a8") AS "s8"
     FROM "{measurement}"
-    WHERE ("sn" =~ /^({serial_no})$/)
+    WHERE ("{tag_key}" =~ /^({serial_no})$/)
       AND time >= {start_unix}000ms AND time <= {end_unix}000ms
     GROUP BY time(1m) fill(none)
     '''
@@ -196,7 +237,9 @@ if serial_numbers:
     sn_counter = Counter(serial_numbers)
     duplicate_count = sum(1 for v in sn_counter.values() if v > 1)
     unique_count = len(sn_counter)
-    st.write(f"Serial No. ที่แสดงใน dropdown : {len(unique_serial_numbers)} ตัว | จากการ Query ทั้งหมด : {len(serial_numbers)} ตัว | ไม่ซ้ำ : {unique_count} ตัว | ซ้ำ : {duplicate_count} ตัว")
+    # นับเฉพาะ serial number จริง (ไม่รวม "-" และ "❌ ไม่เจอ...")
+    actual_sn_count = len([sn for sn in unique_serial_numbers if sn != "-" and not sn.startswith("❌")])
+    st.write(f"Serial No. ที่แสดงใน dropdown : {actual_sn_count} ตัว | จากการ Query ทั้งหมด : {len(serial_numbers)} ตัว | ไม่ซ้ำ : {unique_count} ตัว | ซ้ำ : {duplicate_count} ตัว")
 else:
     st.write("Serial No. ที่แสดงใน dropdown : 0 ตัว | จากการ Query ทั้งหมด : 0 ตัว | ไม่ซ้ำ : 0 ตัว | ซ้ำ : 0 ตัว")
 
@@ -204,12 +247,16 @@ st.markdown("")
 
 # ปุ่ม Export to CSV
 if st.button("Export to CSV", type="primary"):
-    if not selected_measurement or not selected_sn:
-        st.warning("กรุณาเลือก Measurement และ Serial No. ก่อน export")
+    # Validation ที่ปรับปรุงแล้ว
+    if not selected_measurement or selected_measurement == "-":
+        st.warning("⚠️ กรุณาเลือก Measurement ก่อน export")
+    elif not selected_sn or selected_sn == "-" or selected_sn == "❌ ไม่เจอ - ค้นหาจาก Station":
+        st.warning("⚠️ กรุณาเลือก Serial No. หรือ Station ก่อน export")
     else:
         st.session_state.show_split_config = True
         st.session_state.selected_measurement = selected_measurement
         st.session_state.selected_sn = selected_sn
+        st.session_state.use_station = (selected_station is not None)
         st.rerun()
 
 # แสดงส่วน Split Configuration
@@ -331,7 +378,8 @@ if st.session_state.get('show_split_config', False):
                 split_end_unix = int(split_end_dt.timestamp())
                 
                 # Query data
-                query = build_query(st.session_state.selected_measurement, st.session_state.selected_sn, split_start_unix, split_end_unix)
+                use_station = st.session_state.get('use_station', False)
+                query = build_query(st.session_state.selected_measurement, st.session_state.selected_sn, split_start_unix, split_end_unix, use_station)
                 df = query_to_dataframe(client, query)
                 
                 if not df.empty:
@@ -383,6 +431,9 @@ if st.session_state.csv_files:
         st.session_state.pop('edit_df', None)
         st.session_state.pop('edit_filename', None)
         st.session_state.pop('show_split_config', None)
+        st.session_state.pop('use_station', None)
+        st.session_state.pop('selected_measurement', None)
+        st.session_state.pop('selected_sn', None)
         st.session_state.splits = []
         st.success("✅ ล้างไฟล์ใน Memory แล้ว")
         st.rerun()
@@ -423,9 +474,19 @@ if selected_measurement not in measurements:
     st.error("Measurement ไม่ถูกต้อง")
     st.stop()
 
-if selected_sn not in unique_serial_numbers:
-    st.error("Serial No. ไม่ถูกต้อง")
-    st.stop()
+# ตรวจสอบ Serial No. หรือ Station
+if selected_station:
+    # ถ้าใช้ Station ให้ตรวจว่า station ถูกต้องหรือไม่
+    if client and selected_measurement != "-":
+        valid_stations = get_station_names(client, selected_measurement)
+        if selected_station not in valid_stations:
+            st.error("Station ไม่ถูกต้อง")
+            st.stop()
+else:
+    # ถ้าใช้ Serial No. ตรวจตามเดิม
+    if selected_sn not in unique_serial_numbers:
+        st.error("Serial No. ไม่ถูกต้อง")
+        st.stop()
 
 
 
