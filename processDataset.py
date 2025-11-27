@@ -171,12 +171,12 @@ def process_smell_label(smell_label_csv, smell_name_excel):
     ax.grid(True, alpha=0.3)
     ax.axhline(y=0, color='k', linestyle='--', linewidth=0.5)
     ax.axvline(x=0, color='k', linestyle='--', linewidth=0.5)
-    ax.legend(loc='upper right', fontsize=9, framealpha=0.9, 
-              bbox_to_anchor=(1.0, 1.0), borderaxespad=0.5,
+    ax.legend(loc='center left', fontsize=9, framealpha=0.9, 
+              bbox_to_anchor=(1.02, 0.5), borderaxespad=0,
               handletextpad=1.0, labelspacing=1.2)
     
     img_buf_pca = io.BytesIO()
-    plt.tight_layout(pad=1.5)
+    plt.tight_layout()
     plt.savefig(img_buf_pca, format='png', dpi=150)
     plt.close(fig)
     pca_outputs['pcaPlot/pca_scatter_2d.png'] = img_buf_pca.getvalue()
