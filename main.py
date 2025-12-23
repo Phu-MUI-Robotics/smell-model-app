@@ -102,18 +102,27 @@ st.title("Smell Model Mini-App")
 time_precision = st.selectbox("เลือกความละเอียดของเวลา:", ["นาที (00:00)", "วินาที (00:00:00)"], index=0)
 is_second = time_precision == "วินาที (00:00:00)"
 
+
 # --- Date & Time Picker ---
 col1, col2 = st.columns(2)
 with col1:
     start_date = st.date_input("วันที่เริ่มต้น", value=datetime.now().date() - timedelta(days=1))
     if is_second:
-        start_time = st.time_input("เวลาเริ่มต้น", value=time(0, 0, 0))
+        colh, colm, cols = st.columns(3)
+        start_hour = colh.selectbox("ชั่วโมงเริ่มต้น", list(range(0,24)), index=0, key="start_hour")
+        start_minute = colm.selectbox("นาทีเริ่มต้น", list(range(0,60)), index=0, key="start_minute")
+        start_second = cols.selectbox("วินาทีเริ่มต้น", list(range(0,60)), index=0, key="start_second")
+        start_time = time(start_hour, start_minute, start_second)
     else:
         start_time = st.time_input("เวลาเริ่มต้น", value=time(0, 0))
 with col2:
     end_date = st.date_input("วันที่สิ้นสุด", value=datetime.now().date())
     if is_second:
-        end_time = st.time_input("เวลาสิ้นสุด", value=time(23, 59, 59))
+        colh, colm, cols = st.columns(3)
+        end_hour = colh.selectbox("ชั่วโมงสิ้นสุด", list(range(0,24)), index=23, key="end_hour")
+        end_minute = colm.selectbox("นาทีสิ้นสุด", list(range(0,60)), index=59, key="end_minute")
+        end_second = cols.selectbox("วินาทีสิ้นสุด", list(range(0,60)), index=59, key="end_second")
+        end_time = time(end_hour, end_minute, end_second)
     else:
         end_time = st.time_input("เวลาสิ้นสุด", value=time(23, 59))
 
@@ -306,11 +315,12 @@ if st.session_state.get('show_split_config', False):
                     key=f"split_{i}_start_date"
                 )
                 if is_second:
-                    split_start_time = st.time_input(
-                        f"เวลาเริ่มต้น (Split {i+1})",
-                        value=st.session_state.splits[i]['start_time'] if st.session_state.splits[i]['start_time'].second else time(st.session_state.splits[i]['start_time'].hour, st.session_state.splits[i]['start_time'].minute, 0),
-                        key=f"split_{i}_start_time"
-                    )
+                    colh, colm, cols = st.columns(3)
+                    sst = st.session_state.splits[i]['start_time']
+                    split_start_hour = colh.selectbox(f"ชั่วโมงเริ่มต้น (Split {i+1})", list(range(0,24)), index=sst.hour, key=f"split_{i}_start_hour")
+                    split_start_minute = colm.selectbox(f"นาทีเริ่มต้น (Split {i+1})", list(range(0,60)), index=sst.minute, key=f"split_{i}_start_minute")
+                    split_start_second = cols.selectbox(f"วินาทีเริ่มต้น (Split {i+1})", list(range(0,60)), index=sst.second if hasattr(sst, 'second') else 0, key=f"split_{i}_start_second")
+                    split_start_time = time(split_start_hour, split_start_minute, split_start_second)
                 else:
                     split_start_time = st.time_input(
                         f"เวลาเริ่มต้น (Split {i+1})",
@@ -326,11 +336,12 @@ if st.session_state.get('show_split_config', False):
                     key=f"split_{i}_end_date"
                 )
                 if is_second:
-                    split_end_time = st.time_input(
-                        f"เวลาสิ้นสุด (Split {i+1})",
-                        value=st.session_state.splits[i]['end_time'] if st.session_state.splits[i]['end_time'].second else time(st.session_state.splits[i]['end_time'].hour, st.session_state.splits[i]['end_time'].minute, 0),
-                        key=f"split_{i}_end_time"
-                    )
+                    eet = st.session_state.splits[i]['end_time']
+                    colh, colm, cols = st.columns(3)
+                    split_end_hour = colh.selectbox(f"ชั่วโมงสิ้นสุด (Split {i+1})", list(range(0,24)), index=eet.hour, key=f"split_{i}_end_hour")
+                    split_end_minute = colm.selectbox(f"นาทีสิ้นสุด (Split {i+1})", list(range(0,60)), index=eet.minute, key=f"split_{i}_end_minute")
+                    split_end_second = cols.selectbox(f"วินาทีสิ้นสุด (Split {i+1})", list(range(0,60)), index=eet.second if hasattr(eet, 'second') else 0, key=f"split_{i}_end_second")
+                    split_end_time = time(split_end_hour, split_end_minute, split_end_second)
                 else:
                     split_end_time = st.time_input(
                         f"เวลาสิ้นสุด (Split {i+1})",
