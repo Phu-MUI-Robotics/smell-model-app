@@ -109,20 +109,26 @@ with col1:
     start_date = st.date_input("วันที่เริ่มต้น", value=datetime.now().date() - timedelta(days=1))
     if is_second:
         colh, colm, cols = st.columns(3)
-        start_hour = colh.selectbox("ชั่วโมงเริ่มต้น", list(range(0,24)), index=0, key="start_hour")
-        start_minute = colm.selectbox("นาทีเริ่มต้น", list(range(0,60)), index=0, key="start_minute")
-        start_second = cols.selectbox("วินาทีเริ่มต้น", list(range(0,60)), index=0, key="start_second")
-        start_time = time(start_hour, start_minute, start_second)
+        hour_options = [str(h).zfill(2) for h in range(0,24)]
+        minute_options = [str(m).zfill(2) for m in range(0,60)]
+        second_options = [str(s).zfill(2) for s in range(0,60)]
+        start_hour_str = colh.selectbox("ชั่วโมงเริ่มต้น", hour_options, index=0, key="start_hour")
+        start_minute_str = colm.selectbox("นาทีเริ่มต้น", minute_options, index=0, key="start_minute")
+        start_second_str = cols.selectbox("วินาทีเริ่มต้น", second_options, index=0, key="start_second")
+        start_time = time(int(start_hour_str), int(start_minute_str), int(start_second_str))
     else:
         start_time = st.time_input("เวลาเริ่มต้น", value=time(0, 0))
 with col2:
     end_date = st.date_input("วันที่สิ้นสุด", value=datetime.now().date())
     if is_second:
         colh, colm, cols = st.columns(3)
-        end_hour = colh.selectbox("ชั่วโมงสิ้นสุด", list(range(0,24)), index=23, key="end_hour")
-        end_minute = colm.selectbox("นาทีสิ้นสุด", list(range(0,60)), index=59, key="end_minute")
-        end_second = cols.selectbox("วินาทีสิ้นสุด", list(range(0,60)), index=59, key="end_second")
-        end_time = time(end_hour, end_minute, end_second)
+        hour_options = [str(h).zfill(2) for h in range(0,24)]
+        minute_options = [str(m).zfill(2) for m in range(0,60)]
+        second_options = [str(s).zfill(2) for s in range(0,60)]
+        end_hour_str = colh.selectbox("ชั่วโมงสิ้นสุด", hour_options, index=23, key="end_hour")
+        end_minute_str = colm.selectbox("นาทีสิ้นสุด", minute_options, index=59, key="end_minute")
+        end_second_str = cols.selectbox("วินาทีสิ้นสุด", second_options, index=59, key="end_second")
+        end_time = time(int(end_hour_str), int(end_minute_str), int(end_second_str))
     else:
         end_time = st.time_input("เวลาสิ้นสุด", value=time(23, 59))
 
@@ -317,10 +323,13 @@ if st.session_state.get('show_split_config', False):
                 if is_second:
                     colh, colm, cols = st.columns(3)
                     sst = st.session_state.splits[i]['start_time']
-                    split_start_hour = colh.selectbox(f"ชั่วโมงเริ่มต้น (Split {i+1})", list(range(0,24)), index=sst.hour, key=f"split_{i}_start_hour")
-                    split_start_minute = colm.selectbox(f"นาทีเริ่มต้น (Split {i+1})", list(range(0,60)), index=sst.minute, key=f"split_{i}_start_minute")
-                    split_start_second = cols.selectbox(f"วินาทีเริ่มต้น (Split {i+1})", list(range(0,60)), index=sst.second if hasattr(sst, 'second') else 0, key=f"split_{i}_start_second")
-                    split_start_time = time(split_start_hour, split_start_minute, split_start_second)
+                    hour_options = [str(h).zfill(2) for h in range(0,24)]
+                    minute_options = [str(m).zfill(2) for m in range(0,60)]
+                    second_options = [str(s).zfill(2) for s in range(0,60)]
+                    split_start_hour_str = colh.selectbox(f"ชั่วโมงเริ่มต้น (Split {i+1})", hour_options, index=sst.hour, key=f"split_{i}_start_hour")
+                    split_start_minute_str = colm.selectbox(f"นาทีเริ่มต้น (Split {i+1})", minute_options, index=sst.minute, key=f"split_{i}_start_minute")
+                    split_start_second_str = cols.selectbox(f"วินาทีเริ่มต้น (Split {i+1})", second_options, index=sst.second if hasattr(sst, 'second') else 0, key=f"split_{i}_start_second")
+                    split_start_time = time(int(split_start_hour_str), int(split_start_minute_str), int(split_start_second_str))
                 else:
                     split_start_time = st.time_input(
                         f"เวลาเริ่มต้น (Split {i+1})",
@@ -337,11 +346,13 @@ if st.session_state.get('show_split_config', False):
                 )
                 if is_second:
                     eet = st.session_state.splits[i]['end_time']
-                    colh, colm, cols = st.columns(3)
-                    split_end_hour = colh.selectbox(f"ชั่วโมงสิ้นสุด (Split {i+1})", list(range(0,24)), index=eet.hour, key=f"split_{i}_end_hour")
-                    split_end_minute = colm.selectbox(f"นาทีสิ้นสุด (Split {i+1})", list(range(0,60)), index=eet.minute, key=f"split_{i}_end_minute")
-                    split_end_second = cols.selectbox(f"วินาทีสิ้นสุด (Split {i+1})", list(range(0,60)), index=eet.second if hasattr(eet, 'second') else 0, key=f"split_{i}_end_second")
-                    split_end_time = time(split_end_hour, split_end_minute, split_end_second)
+                    hour_options = [str(h).zfill(2) for h in range(0,24)]
+                    minute_options = [str(m).zfill(2) for m in range(0,60)]
+                    second_options = [str(s).zfill(2) for s in range(0,60)]
+                    split_end_hour_str = colh.selectbox(f"ชั่วโมงสิ้นสุด (Split {i+1})", hour_options, index=eet.hour, key=f"split_{i}_end_hour")
+                    split_end_minute_str = colm.selectbox(f"นาทีสิ้นสุด (Split {i+1})", minute_options, index=eet.minute, key=f"split_{i}_end_minute")
+                    split_end_second_str = cols.selectbox(f"วินาทีสิ้นสุด (Split {i+1})", second_options, index=eet.second if hasattr(eet, 'second') else 0, key=f"split_{i}_end_second")
+                    split_end_time = time(int(split_end_hour_str), int(split_end_minute_str), int(split_end_second_str))
                 else:
                     split_end_time = st.time_input(
                         f"เวลาสิ้นสุด (Split {i+1})",
