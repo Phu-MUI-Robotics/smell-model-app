@@ -212,6 +212,33 @@ if 'num_splits' not in st.session_state:
     st.session_state.num_splits = 1
 if 'show_split_config' not in st.session_state:
     st.session_state.show_split_config = False
+if 'split_mode' not in st.session_state:
+    st.session_state.split_mode = '⚙️ กำหนด Time Range Splits'
+if 'fixed_points' not in st.session_state:
+    st.session_state.fixed_points = []
+if 'num_fixed_points' not in st.session_state:
+    st.session_state.num_fixed_points = 1
+
+def build_fixed_point_query(measurement, serial_no, fix_unix, use_station=False, is_second=False):
+    tag_key = "sName" if use_station else "sn"
+    if is_second:
+        start_ms = f"{fix_unix}000ms"
+        end_ms = f"{fix_unix}999ms"
+        group_by = "time(1s)"
+    else:
+        fix_min = (fix_unix // 60) * 60
+        start_ms = f"{fix_min}000ms"
+        end_ms = f"{fix_min + 59}999ms"
+        group_by = "time(1m)"
+    query = f'''
+    SELECT mean("a1") AS "s1", mean("a2") AS "s2", mean("a3") AS "s3", mean("a4") AS "s4",
+           mean("a5") AS "s5", mean("a6") AS "s6", mean("a7") AS "s7", mean("a8") AS "s8"
+    FROM "{measurement}"
+    WHERE ("{tag_key}" =~ /^({serial_no})$/)
+      AND time >= {start_ms} AND time <= {end_ms}
+    GROUP BY {group_by} fill(none)
+    '''
+    return query
 
 def build_query(measurement, serial_no, start_unix, end_unix, use_station=False):
     # InfluxDB ใช้ ms
@@ -289,182 +316,303 @@ if st.button("Export to CSV", type="primary"):
 # แสดงส่วน Split Configuration
 if st.session_state.get('show_split_config', False):
     st.markdown("---")
-    st.subheader("⚙️ กำหนด Time Range Splits")
 
-    # เลือกจำนวน splits
-    num_splits = st.number_input("จำนวน Split ที่ต้องการ:", min_value=1, max_value=20, value=st.session_state.num_splits, step=1)
-    st.session_state.num_splits = num_splits
-
-    # Initialize splits list if needed
-    if len(st.session_state.splits) != num_splits:
-        st.session_state.splits = [
-            {
-                'start_date': start_date,
-                'start_time': start_time,
-                'end_date': end_date,
-                'end_time': end_time,
-                'smell_label': f'Smell {i+1}',
-                'smell_name': ''
-            } for i in range(num_splits)
-        ]
-
-    # แสดงฟอร์มสำหรับแต่ละ split
-    for i in range(num_splits):
-        with st.expander(f"📋 Split {i+1}", expanded=(i==0)):
-            col1, col2 = st.columns(2)
-            with col1:
-                split_start_date = st.date_input(
-                    f"วันที่เริ่มต้น (Split {i+1})",
-                    value=st.session_state.splits[i]['start_date'],
-                    min_value=start_date,
-                    max_value=end_date,
-                    key=f"split_{i}_start_date"
-                )
-                if is_second:
-                    colh, colm, cols = st.columns(3)
-                    sst = st.session_state.splits[i]['start_time']
-                    hour_options = [str(h).zfill(2) for h in range(0,24)]
-                    minute_options = [str(m).zfill(2) for m in range(0,60)]
-                    second_options = [str(s).zfill(2) for s in range(0,60)]
-                    split_start_hour_str = colh.selectbox(f"ชั่วโมงเริ่มต้น (Split {i+1})", hour_options, index=sst.hour, key=f"split_{i}_start_hour")
-                    split_start_minute_str = colm.selectbox(f"นาทีเริ่มต้น (Split {i+1})", minute_options, index=sst.minute, key=f"split_{i}_start_minute")
-                    split_start_second_str = cols.selectbox(f"วินาทีเริ่มต้น (Split {i+1})", second_options, index=sst.second if hasattr(sst, 'second') else 0, key=f"split_{i}_start_second")
-                    split_start_time = time(int(split_start_hour_str), int(split_start_minute_str), int(split_start_second_str))
-                else:
-                    split_start_time = st.time_input(
-                        f"เวลาเริ่มต้น (Split {i+1})",
-                        value=time(st.session_state.splits[i]['start_time'].hour, st.session_state.splits[i]['start_time'].minute),
-                        key=f"split_{i}_start_time"
-                    )
-            with col2:
-                split_end_date = st.date_input(
-                    f"วันที่สิ้นสุด (Split {i+1})",
-                    value=st.session_state.splits[i]['end_date'],
-                    min_value=start_date,
-                    max_value=end_date,
-                    key=f"split_{i}_end_date"
-                )
-                if is_second:
-                    eet = st.session_state.splits[i]['end_time']
-                    hour_options = [str(h).zfill(2) for h in range(0,24)]
-                    minute_options = [str(m).zfill(2) for m in range(0,60)]
-                    second_options = [str(s).zfill(2) for s in range(0,60)]
-                    split_end_hour_str = colh.selectbox(f"ชั่วโมงสิ้นสุด (Split {i+1})", hour_options, index=eet.hour, key=f"split_{i}_end_hour")
-                    split_end_minute_str = colm.selectbox(f"นาทีสิ้นสุด (Split {i+1})", minute_options, index=eet.minute, key=f"split_{i}_end_minute")
-                    split_end_second_str = cols.selectbox(f"วินาทีสิ้นสุด (Split {i+1})", second_options, index=eet.second if hasattr(eet, 'second') else 0, key=f"split_{i}_end_second")
-                    split_end_time = time(int(split_end_hour_str), int(split_end_minute_str), int(split_end_second_str))
-                else:
-                    split_end_time = st.time_input(
-                        f"เวลาสิ้นสุด (Split {i+1})",
-                        value=time(st.session_state.splits[i]['end_time'].hour, st.session_state.splits[i]['end_time'].minute),
-                        key=f"split_{i}_end_time"
-                    )
-
-            col3, col4 = st.columns(2)
-            with col3:
-                smell_label = st.text_input(
-                    f"Smell Label (Split {i+1})",
-                    value=st.session_state.splits[i]['smell_label'],
-                    key=f"split_{i}_smell_label",
-                )
-            with col4:
-                smell_name = st.text_input(
-                    f"ชื่อกลิ่น (Split {i+1})",
-                    value=st.session_state.splits[i]['smell_name'],
-                    key=f"split_{i}_smell_name",
-                )
-
-            # Update session state
-            st.session_state.splits[i] = {
-                'start_date': split_start_date,
-                'start_time': split_start_time,
-                'end_date': split_end_date,
-                'end_time': split_end_time,
-                'smell_label': smell_label,
-                'smell_name': smell_name
-            }
+    split_mode = st.radio(
+        "เลือกรูปแบบการกำหนดเวลา:",
+        ["⚙️ กำหนด Time Range Splits", "📌 กำหนด Fixed Time Points"],
+        index=0 if st.session_state.split_mode == "⚙️ กำหนด Time Range Splits" else 1,
+        horizontal=True,
+        key="split_mode_radio"
+    )
+    st.session_state.split_mode = split_mode
 
     st.markdown("")
 
-    # ปุ่ม Process All Splits
-    if st.button("✅ Process All Splits", type="primary"):
-        # Validate all splits
-        validation_errors = []
-        for i, split in enumerate(st.session_state.splits):
-            # Check if smell_name is filled
-            if not split['smell_name'] or split['smell_name'].strip() == '':
-                validation_errors.append(f"❌ Split {i+1}: กรุณากรอกชื่อกลิ่น")
+    # ========== MODE 1: Time Range Splits ==========
+    if split_mode == "⚙️ กำหนด Time Range Splits":
+        st.subheader("⚙️ กำหนด Time Range Splits")
 
-            # Check if time range is within main time range
-            split_start_dt = datetime.combine(split['start_date'], split['start_time'])
-            split_end_dt = datetime.combine(split['end_date'], split['end_time'])
+        num_splits = st.number_input("จำนวน Split ที่ต้องการ:", min_value=1, max_value=20, value=st.session_state.num_splits, step=1)
+        st.session_state.num_splits = num_splits
+
+        if len(st.session_state.splits) != num_splits:
+            st.session_state.splits = [
+                {
+                    'start_date': start_date,
+                    'start_time': start_time,
+                    'end_date': end_date,
+                    'end_time': end_time,
+                    'smell_label': f'Smell {i+1}',
+                    'smell_name': ''
+                } for i in range(num_splits)
+            ]
+
+        for i in range(num_splits):
+            with st.expander(f"📋 Split {i+1}", expanded=(i==0)):
+                col1, col2 = st.columns(2)
+                with col1:
+                    split_start_date = st.date_input(
+                        f"วันที่เริ่มต้น (Split {i+1})",
+                        value=st.session_state.splits[i]['start_date'],
+                        min_value=start_date,
+                        max_value=end_date,
+                        key=f"split_{i}_start_date"
+                    )
+                    if is_second:
+                        colh, colm, cols = st.columns(3)
+                        sst = st.session_state.splits[i]['start_time']
+                        hour_options = [str(h).zfill(2) for h in range(0,24)]
+                        minute_options = [str(m).zfill(2) for m in range(0,60)]
+                        second_options = [str(s).zfill(2) for s in range(0,60)]
+                        split_start_hour_str = colh.selectbox(f"ชั่วโมงเริ่มต้น (Split {i+1})", hour_options, index=sst.hour, key=f"split_{i}_start_hour")
+                        split_start_minute_str = colm.selectbox(f"นาทีเริ่มต้น (Split {i+1})", minute_options, index=sst.minute, key=f"split_{i}_start_minute")
+                        split_start_second_str = cols.selectbox(f"วินาทีเริ่มต้น (Split {i+1})", second_options, index=sst.second if hasattr(sst, 'second') else 0, key=f"split_{i}_start_second")
+                        split_start_time = time(int(split_start_hour_str), int(split_start_minute_str), int(split_start_second_str))
+                    else:
+                        split_start_time = st.time_input(
+                            f"เวลาเริ่มต้น (Split {i+1})",
+                            value=time(st.session_state.splits[i]['start_time'].hour, st.session_state.splits[i]['start_time'].minute),
+                            key=f"split_{i}_start_time"
+                        )
+                with col2:
+                    split_end_date = st.date_input(
+                        f"วันที่สิ้นสุด (Split {i+1})",
+                        value=st.session_state.splits[i]['end_date'],
+                        min_value=start_date,
+                        max_value=end_date,
+                        key=f"split_{i}_end_date"
+                    )
+                    if is_second:
+                        eet = st.session_state.splits[i]['end_time']
+                        hour_options = [str(h).zfill(2) for h in range(0,24)]
+                        minute_options = [str(m).zfill(2) for m in range(0,60)]
+                        second_options = [str(s).zfill(2) for s in range(0,60)]
+                        split_end_hour_str = colh.selectbox(f"ชั่วโมงสิ้นสุด (Split {i+1})", hour_options, index=eet.hour, key=f"split_{i}_end_hour")
+                        split_end_minute_str = colm.selectbox(f"นาทีสิ้นสุด (Split {i+1})", minute_options, index=eet.minute, key=f"split_{i}_end_minute")
+                        split_end_second_str = cols.selectbox(f"วินาทีสิ้นสุด (Split {i+1})", second_options, index=eet.second if hasattr(eet, 'second') else 0, key=f"split_{i}_end_second")
+                        split_end_time = time(int(split_end_hour_str), int(split_end_minute_str), int(split_end_second_str))
+                    else:
+                        split_end_time = st.time_input(
+                            f"เวลาสิ้นสุด (Split {i+1})",
+                            value=time(st.session_state.splits[i]['end_time'].hour, st.session_state.splits[i]['end_time'].minute),
+                            key=f"split_{i}_end_time"
+                        )
+
+                col3, col4 = st.columns(2)
+                with col3:
+                    smell_label = st.text_input(
+                        f"Smell Label (Split {i+1})",
+                        value=st.session_state.splits[i]['smell_label'],
+                        key=f"split_{i}_smell_label",
+                    )
+                with col4:
+                    smell_name = st.text_input(
+                        f"ชื่อกลิ่น (Split {i+1})",
+                        value=st.session_state.splits[i]['smell_name'],
+                        key=f"split_{i}_smell_name",
+                    )
+
+                st.session_state.splits[i] = {
+                    'start_date': split_start_date,
+                    'start_time': split_start_time,
+                    'end_date': split_end_date,
+                    'end_time': split_end_time,
+                    'smell_label': smell_label,
+                    'smell_name': smell_name
+                }
+
+        st.markdown("")
+
+        if st.button("✅ Process All Splits", type="primary", key="process_range_splits"):
+            validation_errors = []
+            for i, split in enumerate(st.session_state.splits):
+                if not split['smell_name'] or split['smell_name'].strip() == '':
+                    validation_errors.append(f"❌ Split {i+1}: กรุณากรอกชื่อกลิ่น")
+
+                split_start_dt = datetime.combine(split['start_date'], split['start_time'])
+                split_end_dt = datetime.combine(split['end_date'], split['end_time'])
+                main_start_dt = datetime.combine(start_date, start_time)
+                main_end_dt = datetime.combine(end_date, end_time)
+
+                if split_start_dt < main_start_dt:
+                    validation_errors.append(f"❌ Split {i+1}: เวลาเริ่มต้นต้องไม่น้อยกว่า {start_time.strftime('%H:%M:%S') if is_second else start_time.strftime('%H:%M')}")
+                if split_end_dt > main_end_dt:
+                    validation_errors.append(f"❌ Split {i+1}: เวลาสิ้นสุดต้องไม่เกิน {end_time.strftime('%H:%M:%S') if is_second else end_time.strftime('%H:%M')}")
+                if split_start_dt >= split_end_dt:
+                    validation_errors.append(f"❌ Split {i+1}: เวลาเริ่มต้นต้องน้อยกว่าเวลาสิ้นสุด")
+
+            if validation_errors:
+                for error in validation_errors:
+                    st.error(error)
+            else:
+                all_dfs = []
+                smell_name_mapping = {}
+
+                for i, split in enumerate(st.session_state.splits):
+                    split_start_dt = bangkok_tz.localize(datetime.combine(split['start_date'], split['start_time']))
+                    split_end_dt = bangkok_tz.localize(datetime.combine(split['end_date'], split['end_time']))
+                    split_start_unix = int(split_start_dt.timestamp())
+                    split_end_unix = int(split_end_dt.timestamp())
+
+                    use_station = st.session_state.get('use_station', False)
+                    query = build_query(st.session_state.selected_measurement, st.session_state.selected_sn, split_start_unix, split_end_unix, use_station)
+                    df = query_to_dataframe(client, query)
+
+                    if not df.empty:
+                        df['Smell'] = split['smell_label']
+                        all_dfs.append(df)
+                        smell_name_mapping[split['smell_label']] = split['smell_name']
+
+                if all_dfs:
+                    combined_df = pd.concat(all_dfs, ignore_index=True)
+
+                    csv_buffer = io.StringIO()
+                    combined_df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+                    st.session_state.csv_files["smell_label.csv"] = csv_buffer.getvalue()
+
+                    name_df = pd.DataFrame([
+                        {'Smell': k, 'Name': v} for k, v in smell_name_mapping.items()
+                    ])
+                    excel_buffer = io.BytesIO()
+                    name_df.to_excel(excel_buffer, index=False)
+                    st.session_state.csv_files["smell_Name.xlsx"] = excel_buffer.getvalue()
+
+                    st.success(f"✅ ประมวลผลสำเร็จ! รวมข้อมูล {len(all_dfs)} splits ({len(combined_df)} แถว)")
+
+                    st.markdown("#### 👀 ตัวอย่างข้อมูลที่รวมแล้ว (Final)")
+                    st.dataframe(combined_df, use_container_width=True)
+
+                    st.markdown("#### 📝 Smell Name Mapping")
+                    st.dataframe(name_df, use_container_width=True)
+                else:
+                    st.error("❌ ไม่พบข้อมูลในช่วงเวลาที่เลือก")
+
+    # ========== MODE 2: Fixed Time Points ==========
+    else:
+        st.subheader("📌 กำหนด Fixed Time Points")
+        time_fmt = "HH:MM:SS" if is_second else "HH:MM"
+        st.caption(f"เลือกเวลาเฉพาะเจาะจง ({time_fmt}) ภายใน Main Range: {start_time.strftime('%H:%M:%S') if is_second else start_time.strftime('%H:%M')} – {end_time.strftime('%H:%M:%S') if is_second else end_time.strftime('%H:%M')} | ได้ข้อมูล 1 แถวต่อชุด")
+
+        num_fixed = st.number_input("จำนวนชุดที่ต้องการ:", min_value=1, max_value=20, value=st.session_state.num_fixed_points, step=1)
+        st.session_state.num_fixed_points = num_fixed
+
+        if len(st.session_state.fixed_points) != num_fixed:
+            st.session_state.fixed_points = [
+                {
+                    'date': start_date,
+                    'fix_time': start_time,
+                    'smell_label': f'Smell {i+1}',
+                    'smell_name': ''
+                } for i in range(num_fixed)
+            ]
+
+        for i in range(num_fixed):
+            with st.expander(f"📌 ชุดที่ {i+1}", expanded=(i==0)):
+                col1, col2 = st.columns(2)
+                with col1:
+                    fp_date = st.date_input(
+                        f"วันที่ (ชุดที่ {i+1})",
+                        value=st.session_state.fixed_points[i]['date'],
+                        min_value=start_date,
+                        max_value=end_date,
+                        key=f"fp_{i}_date"
+                    )
+                    if is_second:
+                        colh, colm, cols = st.columns(3)
+                        fpt = st.session_state.fixed_points[i]['fix_time']
+                        hour_options = [str(h).zfill(2) for h in range(0,24)]
+                        minute_options = [str(m).zfill(2) for m in range(0,60)]
+                        second_options = [str(s).zfill(2) for s in range(0,60)]
+                        fp_hour_str = colh.selectbox(f"ชั่วโมง (ชุดที่ {i+1})", hour_options, index=fpt.hour, key=f"fp_{i}_hour")
+                        fp_minute_str = colm.selectbox(f"นาที (ชุดที่ {i+1})", minute_options, index=fpt.minute, key=f"fp_{i}_minute")
+                        fp_second_str = cols.selectbox(f"วินาที (ชุดที่ {i+1})", second_options, index=fpt.second if hasattr(fpt, 'second') else 0, key=f"fp_{i}_second")
+                        fp_time = time(int(fp_hour_str), int(fp_minute_str), int(fp_second_str))
+                    else:
+                        fp_time = st.time_input(
+                            f"เวลา (ชุดที่ {i+1})",
+                            value=time(st.session_state.fixed_points[i]['fix_time'].hour, st.session_state.fixed_points[i]['fix_time'].minute),
+                            key=f"fp_{i}_time"
+                        )
+                with col2:
+                    fp_smell_label = st.text_input(
+                        f"Smell Label (ชุดที่ {i+1})",
+                        value=st.session_state.fixed_points[i]['smell_label'],
+                        key=f"fp_{i}_smell_label"
+                    )
+                    fp_smell_name = st.text_input(
+                        f"ชื่อกลิ่น (ชุดที่ {i+1})",
+                        value=st.session_state.fixed_points[i]['smell_name'],
+                        key=f"fp_{i}_smell_name"
+                    )
+
+                st.session_state.fixed_points[i] = {
+                    'date': fp_date,
+                    'fix_time': fp_time,
+                    'smell_label': fp_smell_label,
+                    'smell_name': fp_smell_name
+                }
+
+        st.markdown("")
+
+        if st.button("✅ Process All Splits", type="primary", key="process_fixed_points"):
+            validation_errors = []
             main_start_dt = datetime.combine(start_date, start_time)
             main_end_dt = datetime.combine(end_date, end_time)
 
-            if split_start_dt < main_start_dt:
-                validation_errors.append(f"❌ Split {i+1}: เวลาเริ่มต้นต้องไม่น้อยกว่า {start_time.strftime('%H:%M:%S') if is_second else start_time.strftime('%H:%M')}")
-            if split_end_dt > main_end_dt:
-                validation_errors.append(f"❌ Split {i+1}: เวลาสิ้นสุดต้องไม่เกิน {end_time.strftime('%H:%M:%S') if is_second else end_time.strftime('%H:%M')}")
-            if split_start_dt >= split_end_dt:
-                validation_errors.append(f"❌ Split {i+1}: เวลาเริ่มต้นต้องน้อยกว่าเวลาสิ้นสุด")
+            for i, fp in enumerate(st.session_state.fixed_points):
+                if not fp['smell_name'] or fp['smell_name'].strip() == '':
+                    validation_errors.append(f"❌ ชุดที่ {i+1}: กรุณากรอกชื่อกลิ่น")
 
-        # Show validation errors
-        if validation_errors:
-            for error in validation_errors:
-                st.error(error)
-        else:
-            # Process if validation passes
-            all_dfs = []
-            smell_name_mapping = {}
+                fp_dt = datetime.combine(fp['date'], fp['fix_time'])
+                if fp_dt < main_start_dt:
+                    validation_errors.append(f"❌ ชุดที่ {i+1}: เวลาต้องไม่น้อยกว่า {start_time.strftime('%H:%M:%S') if is_second else start_time.strftime('%H:%M')}")
+                if fp_dt > main_end_dt:
+                    validation_errors.append(f"❌ ชุดที่ {i+1}: เวลาต้องไม่เกิน {end_time.strftime('%H:%M:%S') if is_second else end_time.strftime('%H:%M')}")
 
-            # Process each split
-            for i, split in enumerate(st.session_state.splits):
-                # Convert to datetime
-                split_start_dt = bangkok_tz.localize(datetime.combine(split['start_date'], split['start_time']))
-                split_end_dt = bangkok_tz.localize(datetime.combine(split['end_date'], split['end_time']))
-                split_start_unix = int(split_start_dt.timestamp())
-                split_end_unix = int(split_end_dt.timestamp())
-
-                # Query data
-                use_station = st.session_state.get('use_station', False)
-                query = build_query(st.session_state.selected_measurement, st.session_state.selected_sn, split_start_unix, split_end_unix, use_station)
-                df = query_to_dataframe(client, query)
-
-                if not df.empty:
-                    # Set Smell label for entire split
-                    df['Smell'] = split['smell_label']
-                    all_dfs.append(df)
-
-                    # Store smell name mapping
-                    smell_name_mapping[split['smell_label']] = split['smell_name']
-
-            # Concatenate all dataframes (รันครั้งเดียวหลังจาก loop เสร็จ)
-            if all_dfs:
-                combined_df = pd.concat(all_dfs, ignore_index=True)
-
-                # Save to session state
-                csv_buffer = io.StringIO()
-                combined_df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
-                st.session_state.csv_files["smell_label.csv"] = csv_buffer.getvalue()
-
-                # Create smell name mapping Excel
-                name_df = pd.DataFrame([
-                    {'Smell': k, 'Name': v} for k, v in smell_name_mapping.items()
-                ])
-                excel_buffer = io.BytesIO()
-                name_df.to_excel(excel_buffer, index=False)
-                st.session_state.csv_files["smell_Name.xlsx"] = excel_buffer.getvalue()
-
-                st.success(f"✅ ประมวลผลสำเร็จ! รวมข้อมูล {len(all_dfs)} splits ({len(combined_df)} แถว)")
-
-                # Show final combined table only
-                st.markdown("#### 👀 ตัวอย่างข้อมูลที่รวมแล้ว (Final)")
-                st.dataframe(combined_df, use_container_width=True)
-
-                st.markdown("#### 📝 Smell Name Mapping")
-                st.dataframe(name_df, use_container_width=True)
+            if validation_errors:
+                for error in validation_errors:
+                    st.error(error)
             else:
-                st.error("❌ ไม่พบข้อมูลในช่วงเวลาที่เลือก")
+                all_dfs = []
+                smell_name_mapping = {}
+
+                for i, fp in enumerate(st.session_state.fixed_points):
+                    fp_dt = bangkok_tz.localize(datetime.combine(fp['date'], fp['fix_time']))
+                    fix_unix = int(fp_dt.timestamp())
+
+                    use_station = st.session_state.get('use_station', False)
+                    query = build_fixed_point_query(st.session_state.selected_measurement, st.session_state.selected_sn, fix_unix, use_station, is_second)
+                    df = query_to_dataframe(client, query)
+
+                    if not df.empty:
+                        df = df.head(1)
+                        df['Smell'] = fp['smell_label']
+                        all_dfs.append(df)
+                        smell_name_mapping[fp['smell_label']] = fp['smell_name']
+
+                if all_dfs:
+                    combined_df = pd.concat(all_dfs, ignore_index=True)
+
+                    csv_buffer = io.StringIO()
+                    combined_df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+                    st.session_state.csv_files["smell_label.csv"] = csv_buffer.getvalue()
+
+                    name_df = pd.DataFrame([
+                        {'Smell': k, 'Name': v} for k, v in smell_name_mapping.items()
+                    ])
+                    excel_buffer = io.BytesIO()
+                    name_df.to_excel(excel_buffer, index=False)
+                    st.session_state.csv_files["smell_Name.xlsx"] = excel_buffer.getvalue()
+
+                    st.success(f"✅ ประมวลผลสำเร็จ! {len(all_dfs)} ชุด ({len(combined_df)} แถว)")
+
+                    st.markdown("#### 👀 ตัวอย่างข้อมูลที่รวมแล้ว (Final)")
+                    st.dataframe(combined_df, use_container_width=True)
+
+                    st.markdown("#### 📝 Smell Name Mapping")
+                    st.dataframe(name_df, use_container_width=True)
+                else:
+                    st.error("❌ ไม่พบข้อมูลในช่วงเวลาที่เลือก")
 
 # แสดงไฟล์ใน Memory
 if st.session_state.csv_files:
@@ -483,6 +631,8 @@ if st.session_state.csv_files:
         st.session_state.pop('selected_measurement', None)
         st.session_state.pop('selected_sn', None)
         st.session_state.splits = []
+        st.session_state.fixed_points = []
+        st.session_state.split_mode = '⚙️ กำหนด Time Range Splits'
         st.success("✅ ล้างไฟล์ใน Memory แล้ว")
         st.rerun()
 
