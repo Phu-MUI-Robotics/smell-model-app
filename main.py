@@ -317,10 +317,18 @@ if st.button("Export to CSV", type="primary"):
 if st.session_state.get('show_split_config', False):
     st.markdown("---")
 
-    tab1, tab2 = st.tabs(["⚙️ กำหนด Time Range Splits", "📌 กำหนด Fixed Time Points"])
+    split_mode = st.segmented_control(
+        "เลือกรูปแบบการกำหนดเวลา:",
+        ["⚙️ กำหนด Time Range Splits", "📌 กำหนด Fixed Time Points"],
+        default=st.session_state.split_mode,
+        key="split_mode_control"
+    )
+    st.session_state.split_mode = split_mode
+
+    st.markdown("")
 
     # ========== MODE 1: Time Range Splits ==========
-    with tab1:
+    if split_mode == "⚙️ กำหนด Time Range Splits":
 
         num_splits = st.number_input("จำนวน Split ที่ต้องการ:", min_value=1, max_value=20, value=st.session_state.num_splits, step=1)
         st.session_state.num_splits = num_splits
@@ -478,7 +486,7 @@ if st.session_state.get('show_split_config', False):
                     st.error("❌ ไม่พบข้อมูลในช่วงเวลาที่เลือก")
 
     # ========== MODE 2: Fixed Time Points ==========
-    with tab2:
+    else:
         time_fmt = "HH:MM:SS" if is_second else "HH:MM"
         st.caption(f"เลือกเวลาเฉพาะเจาะจง ({time_fmt}) ภายใน Main Range: {start_time.strftime('%H:%M:%S') if is_second else start_time.strftime('%H:%M')} – {end_time.strftime('%H:%M:%S') if is_second else end_time.strftime('%H:%M')} | ได้ข้อมูล 1 แถวต่อชุด")
 
